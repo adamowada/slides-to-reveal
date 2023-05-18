@@ -21,7 +21,7 @@ async def main():
     print("\nProcessing...\n")
     async with async_playwright() as playwright:
         content = await parse_slide_deck(playwright, slide_link)
-        with open(f"class-{class_number}-slideshow/slides.md", "w") as f:
+        with open("slides/slides.md", "w") as f:
             f.write(content)
             print("Success!")
 
@@ -30,6 +30,7 @@ async def parse_slide_deck(playwright, slide_link):
     # Login once. Saves context to ./user_data
     chromium = playwright.chromium
     user_data_dir = "./user_data"
+    # browser = await chromium.launch_persistent_context(user_data_dir, headless=False, slow_mo=1000)  # can change to headed for initial login
     browser = await chromium.launch_persistent_context(user_data_dir)  # can change to headed for initial login
     page = await browser.new_page()
 
@@ -37,6 +38,10 @@ async def parse_slide_deck(playwright, slide_link):
     await page.set_viewport_size({"width": 1600, "height": 1200})
     await page.goto(slide_link)
     await page.click("#grid-view-icon")  # important to get all slide thumbnails loaded
+
+    # Scroll to bottom of page
+    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
     content = await page.content()
 
     # Download the images
@@ -68,7 +73,12 @@ async def parse_slide_deck(playwright, slide_link):
         # Add image if there
         if images_name_list[idx]:  # images exist
             for image in images_name_list[idx]:
-                md += f"\n![Image]({image})\n"  # add accessibility
+                md += f"\n![Image]({image})\n"  # add accessibility later
+
+        # Add notes if there
+        if len(slide.contents) > 1:
+            md += "\nNOTE:\n"
+            md += convert_html_to_revealjs(slide.contents[1])
 
         md += "\n---\n\n"  # new slide break
 
@@ -96,11 +106,10 @@ def parse_images(content):
         images_list.append(slide_images)
 
     # make folders
-    folder_name = f"class-{class_number}-slideshow"  # generate dynamically later
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
-    if not os.path.exists(f"{folder_name}/images"):
-        os.makedirs(f"{folder_name}/images")
+    if not os.path.exists("slides"):
+        os.makedirs("slides")
+    if not os.path.exists("slides/assets"):
+        os.makedirs("slides/assets")
 
     # make requests and download images with slide_index-image_index.png format
     for slide_num, images in enumerate(images_list):
@@ -111,9 +120,9 @@ def parse_images(content):
         for image_num, url in enumerate(images):
             response = requests.get(url, stream=True)
             if response.status_code == 200:
-                with open(f"{folder_name}/images/{slide_num}_{image_num}.png", 'wb') as out_file:
+                with open(f"slides/assets/{slide_num}_{image_num}.png", 'wb') as out_file:
                     out_file.write(response.content)
-                    images_name_list[slide_num].append(f"markdown/images/{slide_num}_{image_num}.png")  # save file name in correct spot
+                    images_name_list[slide_num].append(f"/ops-201-guide/curriculum/class-{class_number}/slides/assets/{slide_num}_{image_num}.png")  # save file name in correct spot
 
 
 def process_ul(ul, tab):
